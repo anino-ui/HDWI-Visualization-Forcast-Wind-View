@@ -1,0 +1,2 @@
+/home/perseverance-clivac/sce/realtime/plotting/example_directory/gefs.hiresml.t2rh.nc
+/home/perseverance-clivac/sce/realtime/plotting/example_directory/gefs.hiresml.gustuv.nc

@@ -1,0 +1,88 @@
+{
+  "app_settings": {
+    "title": "Weather Data API",
+    "host": "0.0.0.0",
+    "port": 8031,
+    "tile_server_url": "http://0.0.0.0:8041"
+  },
+  "paths": {
+    "nc_source_folder": "/home/perseverance-clivac/sce/realtime/gefs00",
+    "tile_output_folder": "./tiles",
+    "zarr_output_folder": "/home/perseverance-clivac/sce/realtime/plotting/zarr_output"
+  },
+  "data_processing": {
+    "zoom_levels": "3-8",
+    "vector_coarsen_factor": 1,
+    "color_relief_file": "color-relief-variables.txt"
+  },
+  "map_settings": {
+    "default_center": [36, -118.5],
+    "default_zoom": 7,
+    "max_bounds": [[33, -121], [39, -116]]
+  },
+  "variables": {
+    "ws": {
+      "name": "Wind Speed",
+      "nc_var": "ws", 
+      "zarr_var": "wind_speed",
+      "unit": "m/s",
+      "min_val": 0,
+      "max_val": 36,
+      "color_table": "color-relief-variables.txt"
+    },
+    "wg": {
+      "name": "Wind Gust",
+      "nc_var": "gust",
+      "zarr_var": "wind_gust",
+      "unit": "m/s",
+      "min_val": 0,
+      "max_val": 55,
+      "color_table": "color-relief-variables.txt"
+    },
+    "ta": {
+      "name": "Temperature",
+      "nc_var": "t2",
+      "zarr_var": "temp",
+      "unit": "°F",
+      "min_val": 0,
+      "max_val": 110,
+      "color_table": "color-relief-variables.txt"
+    },
+    "rh": {
+      "name": "Humidity",
+      "nc_var": "rh2",
+      "zarr_var": "rel_hum",
+      "unit": "%",
+      "min_val": 0,
+      "max_val": 100,
+      "color_table": "color-relief-variables.txt"
+    },
+    "u10": {
+      "name": "U Component",
+      "nc_var": "u10",
+      "zarr_var": "u10",
+      "unit": "m/s",
+      "min_val": -30,
+      "max_val": 30,
+      "color_table": "color-relief-variables.txt"
+    },
+    "v10": {
+      "name": "V Component",
+      "nc_var": "v10",
+      "zarr_var": "v10",
+      "unit": "m/s",
+      "min_val": -30,
+      "max_val": 30,
+      "color_table": "color-relief-variables.txt"
+    },
+    "dir": {
+      "name": "Wind Direction",
+      "nc_var": "dir",
+      "zarr_var": "wind_dir",
+      "unit": "°",
+      "min_val": 0,
+      "max_val": 360,
+      "color_table": "color-relief-variables.txt"
+    }
+  }
+}
