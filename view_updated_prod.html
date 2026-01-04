@@ -1130,8 +1130,8 @@
 
                             <!-- Tab Navigation -->
                             <div class="tab-navigation">
-                                <button class="tab-button active" onclick="switchTab('${tabId}', 'statistics')">📊 Statistics & Time Series</button>
-                                <button class="tab-button" onclick="switchTab('${tabId}', 'map')">🗺️ Map Visualization</button>
+                                <button class="tab-button active" onclick="switchTab(event, '${tabId}', 'statistics')">📊 Statistics & Time Series</button>
+                                <button class="tab-button" onclick="switchTab(event, '${tabId}', 'map')">🗺️ Map Visualization</button>
                             </div>
 
                             <!-- Tab Content: Statistics & Time Series -->
@@ -1168,7 +1168,7 @@
             }
 
             // Tab switching function
-            function switchTab(tabId, tabName) {
+            function switchTab(event, tabId, tabName) {
                 // Hide all tabs for this variable
                 const allTabs = document.querySelectorAll(`[id^="${tabId}-"]`);
                 allTabs.forEach(tab => tab.classList.remove('active'));
