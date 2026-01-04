@@ -120,7 +120,7 @@
             font-size: 14px;
         }
 
-        .input-group select, .input-group input[type=date] {
+        .input-group select, .input-group input[type=date], .input-group input[type=datetime-local] {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid var(--medium-gray);
@@ -254,6 +254,21 @@
         .plot-wrapper { text-align: center; }
         .plot-wrapper img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; }
         .plot-wrapper h4 { margin-top: 10px; color: #333; font-size: 14px; }
+
+        /* Tabs Styles */
+        .tabs-container { margin-top: 20px; }
+        .tabs-header { display: flex; gap: 10px; border-bottom: 2px solid var(--medium-gray); margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-button { background: none; border: none; padding: 12px 20px; cursor: pointer; font-size: 14px; font-weight: 600; color: #6c757d; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab-button:hover { color: var(--primary-color); }
+        .tab-button.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Statistics Selector */
+        .stats-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .stats-checkbox-item { display: flex; align-items: center; gap: 6px; }
+        .stats-checkbox-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .stats-checkbox-item label { cursor: pointer; font-size: 14px; color: var(--dark-gray); }
         
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: none; justify-content: center; align-items: center; color: white; text-align: center; }
         .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
@@ -437,7 +452,45 @@
                     </div>
                 </div>
             </div>
-            
+
+            <div class="control-group">
+                <div class="input-group">
+                    <label>📈 Statistics to Plot</label>
+                    <div class="stats-selector">
+                        <div class="stats-checkbox-item">
+                            <input type="checkbox" id="stat-mean" value="mean" checked>
+                            <label for="stat-mean">Mean</label>
+                        </div>
+                        <div class="stats-checkbox-item">
+                            <input type="checkbox" id="stat-min" value="min" checked>
+                            <label for="stat-min">Min</label>
+                        </div>
+                        <div class="stats-checkbox-item">
+                            <input type="checkbox" id="stat-max" value="max" checked>
+                            <label for="stat-max">Max</label>
+                        </div>
+                        <div class="stats-checkbox-item">
+                            <input type="checkbox" id="stat-std" value="std">
+                            <label for="stat-std">Std Dev</label>
+                        </div>
+                        <div class="stats-checkbox-item">
+                            <input type="checkbox" id="stat-median" value="median">
+                            <label for="stat-median">Median</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="timeRangeStart">📅 Time Range Start (Optional)</label>
+                    <input type="datetime-local" id="timeRangeStart" title="Start time for analysis range">
+                </div>
+
+                <div class="input-group">
+                    <label for="timeRangeEnd">📅 Time Range End (Optional)</label>
+                    <input type="datetime-local" id="timeRangeEnd" title="End time for analysis range">
+                </div>
+            </div>
+
             <button id="analyzeAreaButton" disabled title="Draw a rectangle on the map to enable this button">🔬 Analyze Selected Area</button>
 
         </div>
@@ -1051,6 +1104,22 @@
                     alert("Please select at least one variable to analyze.");
                     return;
                 }
+
+                // Get selected statistics
+                const selectedStats = [];
+                document.querySelectorAll('.stats-selector input[type="checkbox"]:checked').forEach(cb => {
+                    selectedStats.push(cb.value);
+                });
+
+                if (selectedStats.length === 0) {
+                    alert("Please select at least one statistic to plot.");
+                    return;
+                }
+
+                // Get time range values
+                const timeRangeStart = document.getElementById('timeRangeStart').value;
+                const timeRangeEnd = document.getElementById('timeRangeEnd').value;
+
                 loadingOverlay.style.display = 'flex';
                 const requestBody = {
                     lat_min: drawnAreaBounds.getSouth(),
@@ -1058,8 +1127,18 @@
                     lon_min: drawnAreaBounds.getWest(),
                     lon_max: drawnAreaBounds.getEast(),
                     variables: selectedVariables,
-                    timestamp: tileFrames[currentFrame].time
+                    timestamp: tileFrames[currentFrame].time,
+                    selected_statistics: selectedStats
                 };
+
+                // Add time range if specified (convert to ISO format for backend)
+                if (timeRangeStart) {
+                    requestBody.begin_time = new Date(timeRangeStart).toISOString();
+                }
+                if (timeRangeEnd) {
+                    requestBody.end_time = new Date(timeRangeEnd).toISOString();
+                }
+
                 try {
                     const response = await fetch(`${API_BASE_URL}/area_analysis/`, {
                         method: 'POST',
@@ -1081,37 +1160,116 @@
 
             function renderAnalysisResults(results) {
                 const container = document.getElementById('analysis-results-container');
-                container.innerHTML = ''; 
+                container.innerHTML = '';
                 for (const varKey in results) {
                     const result = results[varKey];
                     const section = document.createElement('div');
                     section.className = 'variable-analysis-section';
+
                     if (result.error) {
                         section.innerHTML = `<h3>${varKey.toUpperCase()}</h3><p class="text-red-500">Analysis failed: ${result.error}</p>`;
                     } else {
                         const stats = result.stats_current_frame;
+
+                        // Build stats cards including median
                         const statsHtml = stats && Object.keys(stats).length > 0 ? `
                             <div class="stats-grid">
                                 <div class="stat-card"><div class="stat-card-title">Mean</div><div class="stat-card-value">${stats.mean.toFixed(2)} ${result.units}</div></div>
                                 <div class="stat-card"><div class="stat-card-title">Min</div><div class="stat-card-value">${stats.min.toFixed(2)} ${result.units}</div></div>
                                 <div class="stat-card"><div class="stat-card-title">Max</div><div class="stat-card-value">${stats.max.toFixed(2)} ${result.units}</div></div>
                                 <div class="stat-card"><div class="stat-card-title">Std. Dev.</div><div class="stat-card-value">${stats.std_dev.toFixed(2)}</div></div>
+                                ${stats.median ? `<div class="stat-card"><div class="stat-card-title">Median</div><div class="stat-card-value">${stats.median.toFixed(2)} ${result.units}</div></div>` : ''}
                             </div>
                         ` : '<p>No data for the current frame in this area.</p>';
-                        section.innerHTML = `
+
+                        // Create tab structure
+                        const tabId = `tabs-${varKey}`;
+                        let tabsHtml = `
                             <h3>${result.variable_name}</h3>
                             <h4 class="font-semibold mb-3 text-gray-700">Statistics for Current Frame (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
                             ${statsHtml}
-                            <div class="plots-container">
+                            <div class="tabs-container">
+                                <div class="tabs-header" id="${tabId}-header">
+                                    <button class="tab-button active" data-tab="overview">Overview</button>
+                                    <button class="tab-button" data-tab="distribution">Distribution</button>
+                                    <button class="tab-button" data-tab="spatial">Current Frame</button>`;
+
+                        // Add tabs for individual statistics
+                        if (result.individual_stat_plots) {
+                            for (const statName in result.individual_stat_plots) {
+                                const statLabel = statName.charAt(0).toUpperCase() + statName.slice(1);
+                                tabsHtml += `<button class="tab-button" data-tab="${statName}">${statLabel}</button>`;
+                            }
+                        }
+
+                        tabsHtml += `</div>`;
+
+                        // Tab contents
+                        tabsHtml += `
+                            <div class="tab-content active" data-tab-content="overview">
                                 <div class="plot-wrapper">
-                                    <h4 class="font-semibold mb-2">Time Series (Min, Mean, Max)</h4>
+                                    <h4 class="font-semibold mb-2">Combined Time Series</h4>
                                     <img src="data:image/png;base64,${result.timeseries_plot}" alt="Time series plot">
                                 </div>
+                            </div>
+                            <div class="tab-content" data-tab-content="distribution">
                                 <div class="plot-wrapper">
                                     <h4 class="font-semibold mb-2">Overall Data Distribution</h4>
                                     <img src="data:image/png;base64,${result.boxplot}" alt="Boxplot">
                                 </div>
                             </div>`;
+
+                        // Add static plot tab
+                        if (result.static_plot) {
+                            tabsHtml += `
+                                <div class="tab-content" data-tab-content="spatial">
+                                    <div class="plot-wrapper">
+                                        <h4 class="font-semibold mb-2">Spatial Distribution</h4>
+                                        <img src="data:image/png;base64,${result.static_plot}" alt="Static plot">
+                                    </div>
+                                </div>`;
+                        }
+
+                        // Add individual stat plot tabs
+                        if (result.individual_stat_plots) {
+                            for (const statName in result.individual_stat_plots) {
+                                const statLabel = statName.charAt(0).toUpperCase() + statName.slice(1);
+                                tabsHtml += `
+                                    <div class="tab-content" data-tab-content="${statName}">
+                                        <div class="plot-wrapper">
+                                            <h4 class="font-semibold mb-2">${statLabel} Over Time</h4>
+                                            <img src="data:image/png;base64,${result.individual_stat_plots[statName]}" alt="${statLabel} plot">
+                                        </div>
+                                    </div>`;
+                            }
+                        }
+
+                        tabsHtml += `</div>`; // Close tabs-container
+
+                        section.innerHTML = tabsHtml;
+
+                        // Add event listeners for tabs
+                        setTimeout(() => {
+                            const tabButtons = section.querySelectorAll('.tab-button');
+                            const tabContents = section.querySelectorAll('.tab-content');
+
+                            tabButtons.forEach(button => {
+                                button.addEventListener('click', () => {
+                                    const targetTab = button.getAttribute('data-tab');
+
+                                    // Remove active class from all buttons and contents
+                                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                                    tabContents.forEach(content => content.classList.remove('active'));
+
+                                    // Add active class to clicked button and corresponding content
+                                    button.classList.add('active');
+                                    const targetContent = section.querySelector(`[data-tab-content="${targetTab}"]`);
+                                    if (targetContent) {
+                                        targetContent.classList.add('active');
+                                    }
+                                });
+                            });
+                        }, 0);
                     }
                     container.appendChild(section);
                 }
