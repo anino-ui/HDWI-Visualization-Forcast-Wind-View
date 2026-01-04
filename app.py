@@ -80,6 +80,9 @@ class AreaRequest(BaseModel):
     lon_max: float
     variables: List[str]
     timestamp: str
+    begin_time: str = None  # Optional: Start time for time range selection
+    end_time: str = None    # Optional: End time for time range selection
+    selected_statistics: List[str] = ["mean", "min", "max"]  # Statistics to plot
 
 # =============================================================================
 # Logic
@@ -313,12 +316,12 @@ def area_analysis(req: AreaRequest):
             # 1. Drop Duplicates (from previous fix)
             if "time" in ds.coords:
                 ds = ds.drop_duplicates(dim="time")
-            
+
             # 2. FIX: Sort Coordinates
             # Sort time Ascending (Oldest -> Newest)
             if "time" in ds.dims:
                 ds = ds.sortby("time")
-            
+
             # Sort Latitude Descending (90 -> -90) to match your slice(max, min)
             if "latitude" in ds.dims:
                 ds = ds.sortby("latitude", ascending=False)
@@ -334,7 +337,7 @@ def area_analysis(req: AreaRequest):
                 latitude=slice(req.lat_max, req.lat_min), # Works because we forced lat to be Descending
                 longitude=slice(req.lon_min, req.lon_max),
             )
-            
+
             # This line specifically fails if 'time' is not unique
             current_frame_da = area_da.sel(time=req.timestamp, method="nearest")
 
@@ -346,24 +349,66 @@ def area_analysis(req: AreaRequest):
                     "min": float(current_frame_da.min()),
                     "max": float(current_frame_da.max()),
                     "std_dev": float(current_frame_da.std()),
+                    "median": float(np.nanmedian(current_frame_da.values)),
                 }
-                
-            time_filter_start = datetime.now() - timedelta(days=3.5)
-                
-            ts_da = area_da.sel(time=slice(time_filter_start, None))
 
-         
-            ts_mean = ts_da.mean(dim=["latitude", "longitude"])
-            
-            ts_min = ts_da.min(dim=["latitude", "longitude"])
-            
-            ts_max = ts_da.max(dim=["latitude", "longitude"])
+            # --- Time Range Selection ---
+            # Use custom time range if provided, otherwise use default 3.5 days
+            if req.begin_time and req.end_time:
+                time_filter_start = pd.to_datetime(req.begin_time)
+                time_filter_end = pd.to_datetime(req.end_time)
+                ts_da = area_da.sel(time=slice(time_filter_start, time_filter_end))
+            elif req.begin_time:
+                time_filter_start = pd.to_datetime(req.begin_time)
+                ts_da = area_da.sel(time=slice(time_filter_start, None))
+            elif req.end_time:
+                time_filter_end = pd.to_datetime(req.end_time)
+                ts_da = area_da.sel(time=slice(None, time_filter_end))
+            else:
+                time_filter_start = datetime.now() - timedelta(days=3.5)
+                ts_da = area_da.sel(time=slice(time_filter_start, None))
 
+            # --- Calculate statistics over time ---
+            stat_functions = {
+                "mean": lambda x: x.mean(dim=["latitude", "longitude"]),
+                "min": lambda x: x.min(dim=["latitude", "longitude"]),
+                "max": lambda x: x.max(dim=["latitude", "longitude"]),
+                "std": lambda x: x.std(dim=["latitude", "longitude"]),
+                "median": lambda x: x.median(dim=["latitude", "longitude"])
+            }
+
+            # Calculate all requested statistics
+            stat_series = {}
+            for stat_name in req.selected_statistics:
+                if stat_name in stat_functions:
+                    stat_series[stat_name] = stat_functions[stat_name](ts_da)
+
+            # --- Generate Combined Time Series Plot (Original) ---
             fig_ts, ax_ts = plt.subplots(figsize=(10, 5))
-            ax_ts.plot(ts_mean.time, ts_mean, label="Mean", color="blue")
-            ax_ts.plot(ts_min.time, ts_min, label="Min", color="green", linestyle="--")
-            ax_ts.plot(ts_max.time, ts_max, label="Max", color="red", linestyle="--")
-            ax_ts.fill_between(ts_min.time, ts_min, ts_max, color="gray", alpha=0.2, label="Min-Max Range")
+
+            colors = {"mean": "blue", "min": "green", "max": "red", "std": "orange", "median": "purple"}
+            linestyles = {"mean": "-", "min": "--", "max": "--", "std": "-.", "median": ":"}
+
+            for stat_name, stat_data in stat_series.items():
+                ax_ts.plot(
+                    stat_data.time,
+                    stat_data,
+                    label=stat_name.capitalize(),
+                    color=colors.get(stat_name, "black"),
+                    linestyle=linestyles.get(stat_name, "-")
+                )
+
+            # Add fill between min-max if both are selected
+            if "min" in stat_series and "max" in stat_series:
+                ax_ts.fill_between(
+                    stat_series["min"].time,
+                    stat_series["min"],
+                    stat_series["max"],
+                    color="gray",
+                    alpha=0.2,
+                    label="Min-Max Range"
+                )
+
             ax_ts.set(
                 title=f"Time Series for {var_name.replace('_', ' ').title()} in Selected Area",
                 xlabel="Time",
@@ -373,14 +418,41 @@ def area_analysis(req: AreaRequest):
             ax_ts.grid(True, linestyle='--', alpha=0.6)
             fig_ts.autofmt_xdate()
             fig_ts.tight_layout()
-            
+
             buf_ts = BytesIO()
             fig_ts.savefig(buf_ts, format="png", dpi=120)
             plt.close(fig_ts)
             ts_img_base64 = base64.b64encode(buf_ts.getvalue()).decode("utf-8")
 
+            # --- Generate Individual Statistical Plots ---
+            individual_stat_plots = {}
+            for stat_name, stat_data in stat_series.items():
+                fig_stat, ax_stat = plt.subplots(figsize=(10, 5))
+                ax_stat.plot(
+                    stat_data.time,
+                    stat_data,
+                    marker="o",
+                    markersize=3,
+                    linestyle="-",
+                    color=colors.get(stat_name, "steelblue"),
+                    linewidth=2
+                )
+                ax_stat.set(
+                    title=f"{stat_name.capitalize()} - {var_name.replace('_', ' ').title()}",
+                    xlabel="Time",
+                    ylabel=f"{stat_name.capitalize()} Value ({var_unit})",
+                )
+                ax_stat.grid(True, linestyle='--', alpha=0.6)
+                fig_stat.autofmt_xdate()
+                fig_stat.tight_layout()
+
+                buf_stat = BytesIO()
+                fig_stat.savefig(buf_stat, format="png", dpi=120)
+                plt.close(fig_stat)
+                individual_stat_plots[stat_name] = base64.b64encode(buf_stat.getvalue()).decode("utf-8")
+
             # --- Generate Box Plot of Overall Distribution ---
-            all_values = area_da.values.flatten()
+            all_values = ts_da.values.flatten()
             all_values = all_values[~np.isnan(all_values)]
 
             fig_bp, ax_bp = plt.subplots(figsize=(6, 5))
@@ -399,12 +471,44 @@ def area_analysis(req: AreaRequest):
             plt.close(fig_bp)
             bp_img_base64 = base64.b64encode(buf_bp.getvalue()).decode("utf-8")
 
+            # --- Generate Static Plot of Current Selected Square ---
+            fig_static, ax_static = plt.subplots(figsize=(8, 6))
+
+            # Plot the current frame data
+            im = ax_static.imshow(
+                current_frame_da.values,
+                extent=[req.lon_min, req.lon_max, req.lat_min, req.lat_max],
+                origin='lower',
+                aspect='auto',
+                cmap='viridis'
+            )
+
+            ax_static.set(
+                title=f"Current Frame - {var_name.replace('_', ' ').title()}\n{req.timestamp}",
+                xlabel="Longitude",
+                ylabel="Latitude",
+            )
+
+            # Add colorbar
+            cbar = fig_static.colorbar(im, ax=ax_static)
+            cbar.set_label(f"Value ({var_unit})")
+
+            ax_static.grid(True, linestyle='--', alpha=0.3, color='white')
+            fig_static.tight_layout()
+
+            buf_static = BytesIO()
+            fig_static.savefig(buf_static, format="png", dpi=120)
+            plt.close(fig_static)
+            static_img_base64 = base64.b64encode(buf_static.getvalue()).decode("utf-8")
+
             analysis_results[var_key] = {
                 "variable_name": var_name.replace("_", " ").title(),
                 "units": var_unit,
                 "stats_current_frame": stats_current,
                 "timeseries_plot": ts_img_base64,
                 "boxplot": bp_img_base64,
+                "static_plot": static_img_base64,
+                "individual_stat_plots": individual_stat_plots,
             }
 
         except Exception as e:
