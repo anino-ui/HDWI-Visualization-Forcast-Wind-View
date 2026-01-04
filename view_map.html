@@ -255,6 +255,58 @@
         .plot-wrapper img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; }
         .plot-wrapper h4 { margin-top: 10px; color: #333; font-size: 14px; }
 
+        /* Interactive Map Controls */
+        .interactive-controls {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--medium-gray);
+        }
+        .interactive-controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .interactive-control-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .interactive-control-item label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--dark-gray);
+            margin-bottom: 5px;
+        }
+        .interactive-control-item input,
+        .interactive-control-item select {
+            padding: 8px 12px;
+            border: 1px solid var(--medium-gray);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .update-viz-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .update-viz-btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        .update-viz-btn:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         /* Tab Navigation Styles */
         .tab-navigation { display: flex; border-bottom: 2px solid var(--medium-gray); margin-bottom: 20px; gap: 10px; }
         .tab-button {
@@ -1149,13 +1201,49 @@
                             </div>
 
                             <div id="${tabId}-map" class="tab-content">
-                                <h4 class="font-semibold mb-3 text-gray-700">Spatial Distribution for Selected Area (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
-                                <div class="plot-wrapper">
-                                    <img src="data:image/png;base64,${result.static_plot}" alt="Static map visualization" style="max-width: 800px; margin: 0 auto; display: block;">
-                                    <p style="margin-top: 15px; color: #6c757d; font-size: 14px;">
-                                        This map shows the spatial distribution of ${result.variable_name.toLowerCase()} values across the selected area.
-                                        The colorbar indicates the range from minimum (bottom) to maximum (top) values.
+                                <h4 class="font-semibold mb-3 text-gray-700">Interactive Spatial Distribution for Selected Area</h4>
+
+                                <div class="interactive-controls">
+                                    <div class="interactive-controls-grid">
+                                        <div class="interactive-control-item">
+                                            <label for="${tabId}-hours-before">Hours Before Selected Time</label>
+                                            <input type="number" id="${tabId}-hours-before" min="0" max="72" step="0.5" value="3" />
+                                        </div>
+                                        <div class="interactive-control-item">
+                                            <label for="${tabId}-hours-after">Hours After Selected Time</label>
+                                            <input type="number" id="${tabId}-hours-after" min="0" max="72" step="0.5" value="3" />
+                                        </div>
+                                        <div class="interactive-control-item">
+                                            <label for="${tabId}-statistic">Statistic Type</label>
+                                            <select id="${tabId}-statistic">
+                                                <option value="mean">Mean</option>
+                                                <option value="min">Minimum</option>
+                                                <option value="max">Maximum</option>
+                                                <option value="std">Standard Deviation</option>
+                                                <option value="median">Median</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button class="update-viz-btn" onclick="updateInteractiveVisualization('${varKey}', '${tabId}')">
+                                        🔄 Update Visualization
+                                    </button>
+                                </div>
+
+                                <div id="${tabId}-map-viz-container" class="plot-wrapper">
+                                    <img src="data:image/png;base64,${result.static_plot}" alt="Interactive map visualization" style="max-width: 100%; margin: 0 auto; display: block;">
+                                    <p id="${tabId}-map-description" style="margin-top: 15px; color: #6c757d; font-size: 14px;">
+                                        This map shows the spatial distribution of ${result.variable_name.toLowerCase()} values across the selected area for the current time frame.
+                                        Use the controls above to adjust the time range and statistic type.
                                     </p>
+                                    <div id="${tabId}-map-stats" style="margin-top: 15px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; display: none;">
+                                        <h5 style="font-weight: 600; margin-bottom: 10px;">Summary Statistics:</h5>
+                                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                                            <div><strong>Mean:</strong> <span id="${tabId}-stat-mean">-</span></div>
+                                            <div><strong>Min:</strong> <span id="${tabId}-stat-min">-</span></div>
+                                            <div><strong>Max:</strong> <span id="${tabId}-stat-max">-</span></div>
+                                            <div><strong>Std Dev:</strong> <span id="${tabId}-stat-std">-</span></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -1164,10 +1252,83 @@
                 }
             }
 
+            // Function to update interactive visualization (defined in global scope)
+            window.updateInteractiveVisualization = async function(varKey, tabId) {
+                const hoursBefore = parseFloat(document.getElementById(`${tabId}-hours-before`).value);
+                const hoursAfter = parseFloat(document.getElementById(`${tabId}-hours-after`).value);
+                const statistic = document.getElementById(`${tabId}-statistic`).value;
+
+                const currentTimestamp = tileFrames[currentFrame].time;
+
+                // Show loading state
+                const updateBtn = event.target;
+                updateBtn.disabled = true;
+                updateBtn.textContent = '⏳ Updating...';
+
+                const imgElement = document.querySelector(`#${tabId}-map-viz-container img`);
+                const descElement = document.getElementById(`${tabId}-map-description`);
+                const statsContainer = document.getElementById(`${tabId}-map-stats`);
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/interactive_map_visualization/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            lat_min: drawnAreaBounds.getSouth(),
+                            lat_max: drawnAreaBounds.getNorth(),
+                            lon_min: drawnAreaBounds.getWest(),
+                            lon_max: drawnAreaBounds.getEast(),
+                            variable: varKey,
+                            timestamp: currentTimestamp,
+                            hours_before: hoursBefore,
+                            hours_after: hoursAfter,
+                            statistic: statistic
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server error: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+
+                    // Update image
+                    imgElement.src = `data:image/png;base64,${data.image_base64}`;
+
+                    // Update description
+                    const timeStart = new Date(data.time_range.start).toLocaleString();
+                    const timeEnd = new Date(data.time_range.end).toLocaleString();
+                    descElement.innerHTML = `
+                        This map shows the <strong>${statistic}</strong> of ${data.variable_name.toLowerCase()} values
+                        calculated over the time range from <strong>${timeStart}</strong> to <strong>${timeEnd}</strong>.
+                        <br>The ${statistic} is calculated for each spatial point over this time period.
+                    `;
+
+                    // Update statistics
+                    document.getElementById(`${tabId}-stat-mean`).textContent =
+                        `${data.summary_stats.overall_mean.toFixed(2)} ${data.units}`;
+                    document.getElementById(`${tabId}-stat-min`).textContent =
+                        `${data.summary_stats.overall_min.toFixed(2)} ${data.units}`;
+                    document.getElementById(`${tabId}-stat-max`).textContent =
+                        `${data.summary_stats.overall_max.toFixed(2)} ${data.units}`;
+                    document.getElementById(`${tabId}-stat-std`).textContent =
+                        `${data.summary_stats.overall_std.toFixed(2)} ${data.units}`;
+
+                    statsContainer.style.display = 'block';
+
+                } catch (error) {
+                    console.error('Failed to update visualization:', error);
+                    alert(`Failed to update visualization: ${error.message}`);
+                } finally {
+                    updateBtn.disabled = false;
+                    updateBtn.textContent = '🔄 Update Visualization';
+                }
+            };
+
             returnToMapBtn.addEventListener('click', () => {
                 analysisView.style.display = 'none';
                 appContainer.style.display = 'flex';
-                setTimeout(() => map.invalidateSize(), 10); 
+                setTimeout(() => map.invalidateSize(), 10);
             });
 
             // --- INFO MODAL JAVASCRIPT ---
