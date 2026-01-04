@@ -254,6 +254,28 @@
         .plot-wrapper { text-align: center; }
         .plot-wrapper img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; }
         .plot-wrapper h4 { margin-top: 10px; color: #333; font-size: 14px; }
+
+        /* Tab Navigation Styles */
+        .tab-navigation { display: flex; border-bottom: 2px solid var(--medium-gray); margin-bottom: 20px; gap: 10px; }
+        .tab-button {
+            background-color: transparent;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #6c757d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-button:hover { color: var(--primary-color); background-color: rgba(52, 152, 219, 0.1); }
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: none; justify-content: center; align-items: center; color: white; text-align: center; }
         .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
@@ -1081,11 +1103,12 @@
 
             function renderAnalysisResults(results) {
                 const container = document.getElementById('analysis-results-container');
-                container.innerHTML = ''; 
+                container.innerHTML = '';
                 for (const varKey in results) {
                     const result = results[varKey];
                     const section = document.createElement('div');
                     section.className = 'variable-analysis-section';
+
                     if (result.error) {
                         section.innerHTML = `<h3>${varKey.toUpperCase()}</h3><p class="text-red-500">Analysis failed: ${result.error}</p>`;
                     } else {
@@ -1098,23 +1121,70 @@
                                 <div class="stat-card"><div class="stat-card-title">Std. Dev.</div><div class="stat-card-value">${stats.std_dev.toFixed(2)}</div></div>
                             </div>
                         ` : '<p>No data for the current frame in this area.</p>';
+
+                        // Create unique IDs for tabs
+                        const tabId = `tabs-${varKey}`;
+
                         section.innerHTML = `
                             <h3>${result.variable_name}</h3>
-                            <h4 class="font-semibold mb-3 text-gray-700">Statistics for Current Frame (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
-                            ${statsHtml}
-                            <div class="plots-container">
-                                <div class="plot-wrapper">
-                                    <h4 class="font-semibold mb-2">Time Series (Min, Mean, Max)</h4>
-                                    <img src="data:image/png;base64,${result.timeseries_plot}" alt="Time series plot">
+
+                            <!-- Tab Navigation -->
+                            <div class="tab-navigation">
+                                <button class="tab-button active" onclick="switchTab('${tabId}', 'statistics')">📊 Statistics & Time Series</button>
+                                <button class="tab-button" onclick="switchTab('${tabId}', 'map')">🗺️ Map Visualization</button>
+                            </div>
+
+                            <!-- Tab Content: Statistics & Time Series -->
+                            <div id="${tabId}-statistics" class="tab-content active">
+                                <h4 class="font-semibold mb-3 text-gray-700">Statistics for Current Frame (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
+                                ${statsHtml}
+                                <div class="plots-container">
+                                    <div class="plot-wrapper">
+                                        <h4 class="font-semibold mb-2">Time Series (Min, Mean, Max)</h4>
+                                        <img src="data:image/png;base64,${result.timeseries_plot}" alt="Time series plot">
+                                    </div>
+                                    <div class="plot-wrapper">
+                                        <h4 class="font-semibold mb-2">Overall Data Distribution</h4>
+                                        <img src="data:image/png;base64,${result.boxplot}" alt="Boxplot">
+                                    </div>
                                 </div>
+                            </div>
+
+                            <!-- Tab Content: Map Visualization -->
+                            <div id="${tabId}-map" class="tab-content">
+                                <h4 class="font-semibold mb-3 text-gray-700">Spatial Distribution for Selected Area (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
                                 <div class="plot-wrapper">
-                                    <h4 class="font-semibold mb-2">Overall Data Distribution</h4>
-                                    <img src="data:image/png;base64,${result.boxplot}" alt="Boxplot">
+                                    <img src="data:image/png;base64,${result.static_plot}" alt="Static map visualization" style="max-width: 800px; margin: 0 auto; display: block;">
+                                    <p style="margin-top: 15px; color: #6c757d; font-size: 14px;">
+                                        This map shows the spatial distribution of ${result.variable_name.toLowerCase()} values across the selected area.
+                                        The colorbar indicates the range from minimum (bottom) to maximum (top) values.
+                                    </p>
                                 </div>
-                            </div>`;
+                            </div>
+                        `;
                     }
                     container.appendChild(section);
                 }
+            }
+
+            // Tab switching function
+            function switchTab(tabId, tabName) {
+                // Hide all tabs for this variable
+                const allTabs = document.querySelectorAll(`[id^="${tabId}-"]`);
+                allTabs.forEach(tab => tab.classList.remove('active'));
+
+                // Remove active class from all buttons in this tab group
+                const tabButtons = document.querySelectorAll(`[onclick*="${tabId}"]`);
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+
+                // Show selected tab
+                const selectedTab = document.getElementById(`${tabId}-${tabName}`);
+                if (selectedTab) {
+                    selectedTab.classList.add('active');
+                }
+
+                // Activate the clicked button
+                event.target.classList.add('active');
             }
             
             returnToMapBtn.addEventListener('click', () => {
