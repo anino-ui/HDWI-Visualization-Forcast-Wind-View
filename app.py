@@ -521,6 +521,127 @@ def area_analysis(req: AreaRequest):
 
     return analysis_results
 
+class InteractiveMapRequest(BaseModel):
+    lat_min: float
+    lat_max: float
+    lon_min: float
+    lon_max: float
+    variable: str
+    timestamp: str
+    hours_before: float = 3.0  # Default: 3 hours before
+    hours_after: float = 3.0   # Default: 3 hours after
+    statistic: str = "mean"    # Options: mean, std, max, min, median
+
+@app.post("/interactive_map_visualization/")
+def interactive_map_visualization(req: InteractiveMapRequest):
+    """
+    Returns spatial data for an interactive map visualization.
+    Calculates the selected statistic over the specified time range for each spatial point.
+    """
+    var_key = req.variable
+    if var_key not in VARIABLE_MAP:
+        raise HTTPException(status_code=404, detail=f"Unknown variable: {var_key}")
+
+    var_name = VARIABLE_MAP[var_key]
+    var_unit = VARIABLE_UNITS.get(var_key, "")
+
+    try:
+        check_reload(var_name)
+        ds = load_dataset(var_name)
+
+        # Sort and clean coordinates
+        if "time" in ds.coords:
+            ds = ds.drop_duplicates(dim="time")
+        if "time" in ds.dims:
+            ds = ds.sortby("time")
+        if "latitude" in ds.dims:
+            ds = ds.sortby("latitude", ascending=False)
+        if "longitude" in ds.dims:
+            ds = ds.sortby("longitude")
+
+        da = ds[var_name]
+
+        # Select spatial area
+        area_da = da.sel(
+            latitude=slice(req.lat_max, req.lat_min),
+            longitude=slice(req.lon_min, req.lon_max),
+        )
+
+        # Calculate time range
+        center_time = pd.to_datetime(req.timestamp)
+        time_start = center_time - timedelta(hours=req.hours_before)
+        time_end = center_time + timedelta(hours=req.hours_after)
+
+        # Select time range
+        ts_da = area_da.sel(time=slice(time_start, time_end))
+
+        # Calculate the selected statistic over time for each spatial point
+        stat_functions = {
+            "mean": lambda x: x.mean(dim="time"),
+            "min": lambda x: x.min(dim="time"),
+            "max": lambda x: x.max(dim="time"),
+            "std": lambda x: x.std(dim="time"),
+            "median": lambda x: x.median(dim="time")
+        }
+
+        if req.statistic not in stat_functions:
+            raise HTTPException(status_code=400, detail=f"Invalid statistic: {req.statistic}")
+
+        # Calculate statistic
+        stat_data = stat_functions[req.statistic](ts_da)
+
+        # Generate plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+
+        im = ax.imshow(
+            stat_data.values,
+            extent=[req.lon_min, req.lon_max, req.lat_min, req.lat_max],
+            origin='lower',
+            aspect='auto',
+            cmap='viridis'
+        )
+
+        ax.set(
+            title=f"{req.statistic.capitalize()} - {var_name.replace('_', ' ').title()}\nTime Range: {time_start.strftime('%Y-%m-%d %H:%M')} to {time_end.strftime('%Y-%m-%d %H:%M')}",
+            xlabel="Longitude",
+            ylabel="Latitude",
+        )
+
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label(f"{req.statistic.capitalize()} Value ({var_unit})")
+
+        ax.grid(True, linestyle='--', alpha=0.3, color='white')
+        fig.tight_layout()
+
+        buf = BytesIO()
+        fig.savefig(buf, format="png", dpi=120)
+        plt.close(fig)
+        img_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        # Calculate summary statistics
+        summary_stats = {
+            "overall_mean": float(stat_data.mean()),
+            "overall_min": float(stat_data.min()),
+            "overall_max": float(stat_data.max()),
+            "overall_std": float(stat_data.std()),
+        }
+
+        return {
+            "image_base64": img_base64,
+            "variable_name": var_name.replace("_", " ").title(),
+            "units": var_unit,
+            "statistic": req.statistic,
+            "time_range": {
+                "start": time_start.isoformat(),
+                "end": time_end.isoformat(),
+                "center": center_time.isoformat(),
+            },
+            "summary_stats": summary_stats,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate visualization: {str(e)}")
+
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, (np.float32, np.float64)):
