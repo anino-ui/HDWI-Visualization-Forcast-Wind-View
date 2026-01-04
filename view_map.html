@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DLGNOME Analysis Viewer</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.6.0/dist/geosearch.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-velocity@1.1.0/dist/leaflet-velocity.css" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/css/shepherd.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/js/shepherd.min.js"></script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- All your existing CSS styles are unchanged --- */
+        :root {
+            --primary-color: #3498db;
+            --primary-hover: #2980b9;
+            --secondary-color: #e67e22;
+            --secondary-hover: #d35400;
+            --light-gray: #f0f2f5;
+            --medium-gray: #e0e0e0;
+            --dark-gray: #34495e;
+            --text-color: #2c3e50;
+            --card-bg: #ffffff;
+            --border-radius: 12px;
+            --shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--light-gray);
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        #app-container, #analysis-view {
+            width: 100%;
+            height: 100%;
+            max-width: 1400px;
+            gap: 24px;
+            display: flex;
+        }
+
+        #left-panel {
+            flex: 0 0 340px;
+            background-color: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #panel-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--medium-gray);
+        }
+
+        #panel-header img { height: 32px; }
+        #panel-header h2 { font-size: 20px; color: var(--text-color); font-weight: 700; }
+
+        .control-group {
+            width: 100%;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--light-gray);
+        }
+
+        #button-group {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        #button-group button {
+            padding: 10px;
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 18px;
+        }
+        
+        #button-group button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        
+        .input-group { margin-bottom: 16px; }
+        .input-group label {
+            font-weight: 600;
+            color: var(--dark-gray);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .input-group select, .input-group input[type=date] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--medium-gray);
+            border-radius: 8px;
+            font-size: 14px;
+            background-color: #f8f9fa;
+        }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--medium-gray);
+            border-radius: 5px;
+            outline: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary-color);
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+
+        #timestamp {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-color);
+            text-align: center;
+            width: 100%;
+            padding: 10px;
+            background-color: var(--light-gray);
+            border-radius: 8px;
+        }
+        
+        #map-and-legend-wrapper {
+            flex: 1;
+            display: flex;
+            gap: 24px;
+            align-items: stretch;
+        }
+
+        #map-container {
+            flex-grow: 1;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #map { width: 100%; height: 100%; }
+
+        #probe-display {
+            position: absolute;
+            top: 15px; right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 800;
+            pointer-events: none;
+        }
+
+        /* --- MODIFIED: Ensure Leaflet control is on top --- */
+        .leaflet-control-layers {
+            z-index: 801 !important;
+        }
+
+        .legend-vertical {
+            flex: 0 0 90px;
+            background-color: var(--card-bg);
+            padding: 20px 10px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            height: fit-content;
+            align-self: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .legend-title { font-weight: 700; margin-bottom: 15px; text-align: center; color: var(--text-color); }
+        .color-bar-vertical { width: 25px; height: 400px; border-radius: 5px; }
+        .legend-labels-vertical { display: flex; flex-direction: column; justify-content: space-between; height: 400px; font-size: 12px; margin-left: 10px; font-weight: 500; }
+        
+        .color-bar-wind {
+            background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(18, 0, 35, 1), rgba(36, 0, 71, 1), rgba(53, 0, 106, 1), rgba(71, 0, 142, 1), rgba(89, 0, 177, 1), rgba(107, 0, 213, 1), rgba(124, 0, 248, 1), rgba(128, 0, 255, 1), rgba(109, 0, 255, 1), rgba(87, 0, 255, 1), rgba(65, 0, 255, 1), rgba(43, 0, 255, 1), rgba(22, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 35, 255, 1), rgba(0, 104, 255, 1), rgba(0, 173, 255, 1), rgba(0, 242, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 248, 1), rgba(0, 255, 179, 1), rgba(0, 255, 110, 1), rgba(0, 255, 41, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(28, 255, 0, 1), rgba(64, 255, 0, 1), rgba(100, 255, 0, 1), rgba(136, 255, 0, 1), rgba(172, 255, 0, 1), rgba(208, 255, 0, 1), rgba(244, 255, 0, 1), rgba(255, 255, 0, 1), rgba(255, 234, 0, 1), rgba(255, 197, 0, 1), rgba(255, 160, 0, 1), rgba(255, 123, 0, 1), rgba(255, 86, 0, 1), rgba(255, 49, 0, 1), rgba(255, 12, 0, 1), rgba(255, 0, 0, 1), rgba(255, 0, 7, 1), rgba(255, 0, 42, 1), rgba(255, 0, 78, 1), rgba(255, 0, 114, 1), rgba(255, 0, 149, 1), rgba(255, 0, 185, 1), rgba(255, 0, 221, 1), rgba(255, 0, 255, 1));
+        }
+        .color-bar-gust {
+            background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(18, 0, 35, 1), rgba(36, 0, 71, 1), rgba(53, 0, 106, 1), rgba(71, 0, 142, 1), rgba(89, 0, 177, 1), rgba(107, 0, 213, 1), rgba(124, 0, 248, 1), rgba(128, 0, 255, 1), rgba(109, 0, 255, 1), rgba(87, 0, 255, 1), rgba(65, 0, 255, 1), rgba(43, 0, 255, 1), rgba(22, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 35, 255, 1), rgba(0, 104, 255, 1), rgba(0, 173, 255, 1), rgba(0, 242, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 248, 1), rgba(0, 255, 179, 1), rgba(0, 255, 110, 1), rgba(0, 255, 41, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(28, 255, 0, 1), rgba(64, 255, 0, 1), rgba(100, 255, 0, 1), rgba(136, 255, 0, 1), rgba(172, 255, 0, 1), rgba(208, 255, 0, 1), rgba(244, 255, 0, 1), rgba(255, 255, 0, 1), rgba(255, 234, 0, 1), rgba(255, 197, 0, 1), rgba(255, 160, 0, 1), rgba(255, 123, 0, 1), rgba(255, 86, 0, 1), rgba(255, 49, 0, 1), rgba(255, 12, 0, 1), rgba(255, 0, 0, 1), rgba(255, 0, 7, 1), rgba(255, 0, 42, 1), rgba(255, 0, 78, 1), rgba(255, 0, 114, 1), rgba(255, 0, 149, 1), rgba(255, 0, 185, 1), rgba(255, 0, 221, 1), rgba(255, 0, 255, 1));
+        }
+        .color-bar-temperature {
+            background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(18, 0, 35, 1), rgba(36, 0, 71, 1), rgba(53, 0, 106, 1), rgba(71, 0, 142, 1), rgba(89, 0, 177, 1), rgba(107, 0, 213, 1), rgba(124, 0, 248, 1), rgba(128, 0, 255, 1), rgba(109, 0, 255, 1), rgba(87, 0, 255, 1), rgba(65, 0, 255, 1), rgba(43, 0, 255, 1), rgba(22, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 35, 255, 1), rgba(0, 104, 255, 1), rgba(0, 173, 255, 1), rgba(0, 242, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 248, 1), rgba(0, 255, 179, 1), rgba(0, 255, 110, 1), rgba(0, 255, 41, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(28, 255, 0, 1), rgba(64, 255, 0, 1), rgba(100, 255, 0, 1), rgba(136, 255, 0, 1), rgba(172, 255, 0, 1), rgba(208, 255, 0, 1), rgba(244, 255, 0, 1), rgba(255, 255, 0, 1), rgba(255, 234, 0, 1), rgba(255, 197, 0, 1), rgba(255, 160, 0, 1), rgba(255, 123, 0, 1), rgba(255, 86, 0, 1), rgba(255, 49, 0, 1), rgba(255, 12, 0, 1), rgba(255, 0, 0, 1), rgba(255, 0, 7, 1), rgba(255, 0, 42, 1), rgba(255, 0, 78, 1), rgba(255, 0, 114, 1), rgba(255, 0, 149, 1), rgba(255, 0, 185, 1), rgba(255, 0, 221, 1), rgba(255, 0, 255, 1));
+        }
+        .color-bar-dew {
+            background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(18, 0, 35, 1), rgba(36, 0, 71, 1), rgba(53, 0, 106, 1), rgba(71, 0, 142, 1), rgba(89, 0, 177, 1), rgba(107, 0, 213, 1), rgba(124, 0, 248, 1), rgba(128, 0, 255, 1), rgba(109, 0, 255, 1), rgba(87, 0, 255, 1), rgba(65, 0, 255, 1), rgba(43, 0, 255, 1), rgba(22, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 35, 255, 1), rgba(0, 104, 255, 1), rgba(0, 173, 255, 1), rgba(0, 242, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 248, 1), rgba(0, 255, 179, 1), rgba(0, 255, 110, 1), rgba(0, 255, 41, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(28, 255, 0, 1), rgba(64, 255, 0, 1), rgba(100, 255, 0, 1), rgba(136, 255, 0, 1), rgba(172, 255, 0, 1), rgba(208, 255, 0, 1), rgba(244, 255, 0, 1), rgba(255, 255, 0, 1), rgba(255, 234, 0, 1), rgba(255, 197, 0, 1), rgba(255, 160, 0, 1), rgba(255, 123, 0, 1), rgba(255, 86, 0, 1), rgba(255, 49, 0, 1), rgba(255, 12, 0, 1), rgba(255, 0, 0, 1), rgba(255, 0, 7, 1), rgba(255, 0, 42, 1), rgba(255, 0, 78, 1), rgba(255, 0, 114, 1), rgba(255, 0, 149, 1), rgba(255, 0, 185, 1), rgba(255, 0, 221, 1), rgba(255, 0, 255, 1));
+        }
+        .color-bar-humidity {
+            background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(18, 0, 35, 1), rgba(36, 0, 71, 1), rgba(53, 0, 106, 1), rgba(71, 0, 142, 1), rgba(89, 0, 177, 1), rgba(107, 0, 213, 1), rgba(124, 0, 248, 1), rgba(128, 0, 255, 1), rgba(109, 0, 255, 1), rgba(87, 0, 255, 1), rgba(65, 0, 255, 1), rgba(43, 0, 255, 1), rgba(22, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 0, 255, 1), rgba(0, 35, 255, 1), rgba(0, 104, 255, 1), rgba(0, 173, 255, 1), rgba(0, 242, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 255, 1), rgba(0, 255, 248, 1), rgba(0, 255, 179, 1), rgba(0, 255, 110, 1), rgba(0, 255, 41, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(0, 255, 0, 1), rgba(28, 255, 0, 1), rgba(64, 255, 0, 1), rgba(100, 255, 0, 1), rgba(136, 255, 0, 1), rgba(172, 255, 0, 1), rgba(208, 255, 0, 1), rgba(244, 255, 0, 1), rgba(255, 255, 0, 1), rgba(255, 234, 0, 1), rgba(255, 197, 0, 1), rgba(255, 160, 0, 1), rgba(255, 123, 0, 1), rgba(255, 86, 0, 1), rgba(255, 49, 0, 1), rgba(255, 12, 0, 1), rgba(255, 0, 0, 1), rgba(255, 0, 7, 1), rgba(255, 0, 42, 1), rgba(255, 0, 78, 1), rgba(255, 0, 114, 1), rgba(255, 0, 149, 1), rgba(255, 0, 185, 1), rgba(255, 0, 221, 1), rgba(255, 0, 255, 1));
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #aaa; }
+        #multi-select-container { font-family: 'Inter', sans-serif; }
+        
+        /* Analysis View Styles */
+        #analysis-view { display: none; background-color: var(--card-bg); padding: 30px; border-radius: var(--border-radius); box-shadow: var(--shadow); overflow-y: auto; flex-direction: column; }
+        .analysis-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--medium-gray); padding-bottom: 15px; margin-bottom: 25px; }
+        .analysis-header h2 { font-size: 26px; color: var(--text-color); }
+        #returnToMapBtn { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; }
+        #returnToMapBtn:hover { background-color: var(--primary-hover); }
+        
+        .variable-analysis-section { margin-bottom: 30px; border: 1px solid var(--medium-gray); border-radius: var(--border-radius); padding: 20px; background-color: #f8f9fa; }
+        .variable-analysis-section h3 { font-size: 20px; color: var(--text-color); border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background-color: var(--card-bg); padding: 15px; border-radius: 8px; text-align: center; border: 1px solid var(--medium-gray); }
+        .stat-card-title { font-size: 14px; color: #6c757d; margin-bottom: 5px; }
+        .stat-card-value { font-size: 22px; font-weight: bold; color: var(--text-color); }
+        .plots-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; justify-content: center; }
+        .plot-wrapper { text-align: center; }
+        .plot-wrapper img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; }
+        .plot-wrapper h4 { margin-top: 10px; color: #333; font-size: 14px; }
+
+        /* Tab Navigation Styles */
+        .tab-navigation { display: flex; border-bottom: 2px solid var(--medium-gray); margin-bottom: 20px; gap: 10px; }
+        .tab-button {
+            background-color: transparent;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #6c757d;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-button:hover { color: var(--primary-color); background-color: rgba(52, 152, 219, 0.1); }
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 10000; display: none; justify-content: center; align-items: center; color: white; text-align: center; }
+        .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        button:disabled { background-color: #bdc3c7 !important; cursor: not-allowed !important; transform: none !important; }
+        #analyzeAreaButton { 
+            margin-top: auto; /* Pushes the button to the bottom */
+            background-color: var(--secondary-color); 
+            width: 100%; 
+            padding: 15px 20px; 
+            color: white; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            font-weight: 600; 
+            border: none; 
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #analyzeAreaButton:hover:not(:disabled) { 
+            background-color: var(--secondary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* Info Modal Styles */
+        .info-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 20000;
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+        }
+
+        .info-modal-content {
+            background-color: var(--card-bg);
+            padding: 30px 40px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            width: 90%;
+            max-width: 700px;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .info-modal-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            font-size: 30px;
+            cursor: pointer;
+            color: #888;
+            line-height: 1;
+        }
+        .info-modal-close-btn:hover { color: #333; }
+
+        .info-modal-content h2 {
+            font-size: 24px;
+            color: var(--text-color);
+            margin-top: 0;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--medium-gray);
+            padding-bottom: 15px;
+        }
+        
+        .info-modal-content h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .info-modal-content ul, .info-modal-content ol {
+            padding-left: 20px;
+        }
+        
+        .info-modal-content li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+            color: #444;
+        }
+        
+        .info-modal-content strong {
+            color: var(--dark-gray);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="left-panel" class="custom-scrollbar">
+            <div id="panel-header" style="justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <img src="https://clivac.eri.ucsb.edu/clivac/dlgnome/images/clivac.png" alt="Logo">
+                    <img src="https://clivac.eri.ucsb.edu/clivac/dlgnome/images/Gnome_wind_logo_4.jfif" alt="Logo">
+                    <h2>DLGNOME Viewer</h2>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <button id="startTourBtn" title="Start Interactive Tutorial" style="background: none; border: none; cursor: pointer; padding: 5px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--dark-gray);"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"></path><path d="m15 12-4-3v6l4-3z"></path></svg>
+                    </button>
+                    <button id="infoButton" title="How to use this viewer" style="background: none; border: none; cursor: pointer; padding: 5px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--dark-gray);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                 <div id="timestamp">🕒 Time: Loading...</div>
+            </div>
+            
+            <div class="control-group">
+                <div id="button-group">
+                    <button id="prevButton" title="Previous Frame">⏮</button>
+                    <button id="playButton" title="Play/Pause">▶</button>
+                    <button id="stopButton" title="Stop">⏹</button>
+                    <button id="nextButton" title="Next Frame">⏭</button>
+                </div>
+                <div class="input-group mt-4">
+                     <input type="range" id="frameSlider" min="0" value="0">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="input-group">
+                    <label for="basemapSelect">🗺️ Basemap</label>
+                    <select id="basemapSelect" title="Change the underlying map style">
+                        <option value="streets">Streets</option>
+                        <option value="satellite">Satellite</option>
+                        <option value="dark">Dark</option>
+                        <option value="topo">Topographic</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="variableSelect">🌀 Display Variable</label>
+                    <select id="variableSelect" title="Select the primary weather layer to display on the map"></select>
+                </div>
+                 <div class="input-group">
+                    <label for="dateInput">📅 Date</label>
+                    <input type="date" id="dateInput" title="Jump to a specific date">
+                </div>
+                <div class="input-group">
+                    <label for="timeSelect">🕒 Time of Day</label>
+                    <select id="timeSelect" title="Select a specific time for the chosen date"></select>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="input-group">
+                    <label for="speedControl">🏃 Animation Speed</label>
+                    <input type="range" id="speedControl" min="1" max="20" value="10" title="Adjust the playback speed of the animation">
+                </div>
+                <div class="input-group">
+                    <label for="opacitySlider">🌫️ Layer Opacity</label>
+                    <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.85" title="Control the transparency of the weather data layer">
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label for="select-button">📊 Variables for Analysis</label>
+                <div id="multi-select-container" class="relative w-full">
+                    <div id="select-button" title="Select variables for on-click time-series plots and for the final area analysis report" class="bg-white border border-gray-300 rounded-lg shadow-sm p-3 flex justify-between items-center cursor-pointer transition duration-150 ease-in-out hover:border-blue-500">
+                        <div id="selected-items-container" class="flex flex-wrap gap-2 items-center">
+                            <span id="placeholder" class="text-gray-500">Select options...</span>
+                        </div>
+                        <svg id="dropdown-icon" class="w-5 h-5 text-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div id="dropdown-panel" class="hidden absolute z-10 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-xl">
+                        <ul id="options-list" class="max-h-60 overflow-y-auto custom-scrollbar p-2"></ul>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="analyzeAreaButton" disabled title="Draw a rectangle on the map to enable this button">🔬 Analyze Selected Area</button>
+
+        </div>
+
+        <div id="map-and-legend-wrapper">
+            <div id="map-container">
+                <div id="map"></div>
+                <div id="probe-display"></div>
+            </div>
+            <div class="legend-vertical" id="variable-legend">
+                <div class="legend-title" id="legendTitle"></div>
+                <div style="display: flex; align-items: center;">
+                    <div class="color-bar-vertical" id="colorBar"></div>
+                    <div class="legend-labels-vertical" id="legendLabels"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="analysis-view" class="custom-scrollbar">
+        <div class="analysis-header">
+            <h2>Area Analysis Results</h2>
+            <button id="returnToMapBtn">⬅️ Return to Map</button>
+        </div>
+        <div id="analysis-results-container"></div>
+    </div>
+
+    <div id="loading-overlay">
+        <div>
+            <div class="spinner"></div>
+            <p>Running Analysis... Please Wait.</p>
+        </div>
+    </div>
+
+    <div id="infoModalOverlay" class="info-modal-overlay">
+        <div id="infoModalContent" class="info-modal-content custom-scrollbar">
+            <button id="closeInfoModal" class="info-modal-close-btn">&times;</button>
+            <h2>How to Use the Viewer</h2>
+            
+            <h3>🗺️ Map Interaction</h3>
+            <ul>
+                <li><strong>Pan & Zoom:</strong> Click and drag to move the map. Use your mouse wheel or the +/- buttons to zoom.</li>
+                <li><strong>Data Probe:</strong> Hover your mouse over the map to see the data value for the currently displayed variable at that point.</li>
+                <li><strong>Time Series Plot:</strong> Click anywhere on the map to generate a time-series plot for that location. You must first select one or more variables in the "Variables for Analysis" dropdown.</li>
+            </ul>
+
+            <h3>⚙️ Left Panel Controls</h3>
+            <ul>
+                <li><strong>Animation:</strong> Use the ▶ (Play), ⏸ (Pause), and other buttons to control the time-lapse animation.</li>
+                <li><strong>Time Slider:</strong> Drag the slider to quickly scrub through different time frames.</li>
+                <li><strong>Display Variable:</strong> Select the primary weather variable (e.g., Wind Speed) to display on the map.</li>
+                <li><strong>Date & Time:</strong> Pick a specific date and time to jump directly to that forecast frame.</li>
+            </ul>
+
+            <h3>🔬 Area Analysis</h3>
+            <ol>
+                <li><strong>Select Variables:</strong> In the "Variables for Analysis" dropdown, check the boxes for all variables you want to analyze.</li>
+                <li><strong>Draw an Area:</strong> Use the rectangle tool from the toolbar on the map's left edge to draw a box over your region of interest.</li>
+                <li><strong>Run Analysis:</strong> Click the "Analyze Selected Area" button to begin.</li>
+                <li><strong>View Results:</strong> A new view will appear showing detailed statistics and plots. Click "Return to Map" to go back.</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-geosearch@3.6.0/dist/geosearch.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <script src="https://unpkg.com/leaflet-velocity@1.1.0/dist/leaflet-velocity.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function () {
+            
+            // --- CONFIG AND VARIABLES ---
+            let CONFIG = null;
+            // The Backend URL
+            let API_BASE_URL = "http://127.0.0.1:8031"; 
+            // The Tile Server URL (usually runs on a different port/address)
+            let TILE_BASE_URL = "http://0.0.0.0:8041"; 
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/config`);
+                CONFIG = await response.json();
+                // Optionally update tile server from config if you put it there
+                if(CONFIG.app_settings && CONFIG.app_settings.tile_server_url) {
+                    TILE_BASE_URL = CONFIG.app_settings.tile_server_url;
+                }
+            } catch (e) {
+                console.error("Failed to load config", e);
+                alert("Error: Could not load configuration from server.");
+                return;
+            }
+
+            // Helper: Map variable prefixes to existing CSS classes to conserve your styling
+            function getLegendClass(varKey) {
+                const map = {
+                    'ws': 'color-bar-wind',
+                    'wg': 'color-bar-gust',
+                    'ta': 'color-bar-temperature',
+                    'rh': 'color-bar-humidity',
+                    // Fallbacks for others
+                    'u10': 'color-bar-wind',
+                    'v10': 'color-bar-wind',
+                    'dir': 'color-bar-wind'
+                };
+                return map[varKey] || 'color-bar-wind';
+            }
+
+            // --- START: MULTI-SELECT COMPONENT JAVASCRIPT ---
+            let selectedOptions = [];
+            const container = document.getElementById('multi-select-container');
+            const selectButton = document.getElementById('select-button');
+            const selectedItemsContainer = document.getElementById('selected-items-container');
+            const placeholder = document.getElementById('placeholder');
+            const dropdownIcon = document.getElementById('dropdown-icon');
+            const dropdownPanel = document.getElementById('dropdown-panel');
+            const optionsList = document.getElementById('options-list');
+
+            function initializeMultiSelect() {
+                const multiSelectKeys = Object.keys(CONFIG.variables);
+                
+                function updateSelectedItemsDisplay() {
+                    selectedItemsContainer.innerHTML = '';
+                    if (selectedOptions.length === 0) {
+                        selectedItemsContainer.appendChild(placeholder);
+                    } else {
+                        selectedOptions.forEach(optionValue => {
+                            // Find friendly name
+                            const friendlyName = CONFIG.variables[optionValue].name;
+                            
+                            const pill = document.createElement('div');
+                            pill.className = 'bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-2';
+                            pill.textContent = friendlyName;
+                            const removeBtn = document.createElement('span');
+                            removeBtn.className = 'cursor-pointer text-blue-600 hover:text-blue-800 font-bold';
+                            removeBtn.innerHTML = '&times;';
+                            removeBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                removeOption(optionValue);
+                            };
+                            pill.appendChild(removeBtn);
+                            selectedItemsContainer.appendChild(pill);
+                        });
+                    }
+                }
+
+                function removeOption(optionValue) {
+                    selectedOptions = selectedOptions.filter(o => o !== optionValue);
+                    const checkbox = document.querySelector(`#multi-select-container input[type="checkbox"][value="${optionValue}"]`);
+                    if (checkbox) checkbox.checked = false;
+                    updateSelectedItemsDisplay();
+                }
+
+                function populateOptions() {
+                    multiSelectKeys.forEach(key => {
+                        const varName = CONFIG.variables[key].name;
+                        
+                        const listItem = document.createElement('li');
+                        listItem.className = 'flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer';
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.value = key; // Use prefix as value
+                        checkbox.id = `option-${key}`;
+                        checkbox.className = 'h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer';
+                        const label = document.createElement('label');
+                        label.htmlFor = `option-${key}`;
+                        label.textContent = varName;
+                        label.className = 'ml-3 text-sm font-medium text-gray-700 w-full cursor-pointer';
+                        listItem.append(checkbox, label);
+
+                        listItem.addEventListener('click', (e) => {
+                            if (e.target !== checkbox) checkbox.checked = !checkbox.checked;
+                            if (checkbox.checked) {
+                                if (!selectedOptions.includes(key)) selectedOptions.push(key);
+                            } else {
+                                selectedOptions = selectedOptions.filter(o => o !== key);
+                            }
+                            updateSelectedItemsDisplay();
+                        });
+                        optionsList.appendChild(listItem);
+                    });
+                }
+
+                selectButton.addEventListener('click', () => {
+                    dropdownPanel.classList.toggle('hidden');
+                    dropdownIcon.classList.toggle('rotate-180');
+                });
+
+                document.addEventListener('click', (e) => {
+                    if (!container.contains(e.target)) {
+                        dropdownPanel.classList.add('hidden');
+                        dropdownIcon.classList.remove('rotate-180');
+                    }
+                });
+
+                populateOptions();
+            }
+            // --- END: MULTI-SELECT COMPONENT JAVASCRIPT ---
+
+            // --- MAP & ANIMATION LOGIC ---
+            
+            const variableSelect = document.getElementById("variableSelect");
+            
+            // Populate main dropdown from Config
+            Object.keys(CONFIG.variables).forEach(key => {
+                const option = document.createElement("option");
+                option.value = key;
+                option.textContent = CONFIG.variables[key].name;
+                variableSelect.appendChild(option);
+            });
+
+            // Initialize current variable
+            let currentVariable = Object.keys(CONFIG.variables)[0]; // Default to first in list
+            variableSelect.value = currentVariable;
+
+            variableSelect.addEventListener("change", () => {
+                currentVariable = variableSelect.value;
+                loadTileFramesForVariable(currentVariable);
+                updateLegend(currentVariable);
+            });
+
+            let tileFrames = [];
+            
+            async function loadTileFramesForVariable(variablePrefix) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/tile_frames/${variablePrefix}`);
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    const data = await response.json();
+                    tileFrames = data.tileFrames;
+                    frameSlider.max = tileFrames.length > 0 ? tileFrames.length - 1 : 0;
+                    populateTimeSelect();
+
+                    // Initialize velocity only if configured or always
+                    initializeVelocityLayer();
+
+                    updateFrame(0);
+                } catch (error) {
+                    console.error("Error loading tile frames:", error);
+                    tileFrames = [];
+                    frameSlider.max = 0;
+                    populateTimeSelect();
+                    updateFrame(0);
+                    alert("Failed to load data. Ensure backend is running.");
+                }
+            }
+
+            // Use Config settings for map defaults if available, else fallback
+            const mapCenter = CONFIG.map_settings?.default_center || [36, -118.5];
+            const mapZoom = CONFIG.map_settings?.default_zoom || 7;
+            
+            const map = L.map('map', { zoomControl: false }).setView(mapCenter, mapZoom);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            const searchControl = new GeoSearch.GeoSearchControl({
+                provider: new GeoSearch.OpenStreetMapProvider(),
+                style: 'bar',
+                showMarker: true,
+                autoClose: true,
+            });
+            map.addControl(searchControl);
+
+            const baseLayers = {
+                'streets': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 10, minZoom: 2 }),
+                'satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri', maxZoom: 10, minZoom: 2 }),
+                'dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', maxZoom: 10, minZoom: 2 }),
+                'topo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenTopoMap', maxZoom: 10, minZoom: 2 })
+            };
+            
+            let currentBasemap = baseLayers['streets'];
+            map.addLayer(currentBasemap);
+
+            const overlayMaps = {};
+            const layerControl = L.control.layers(null, overlayMaps, {
+                position: 'bottomleft',
+                collapsed: false 
+            }).addTo(map);
+
+            document.getElementById('basemapSelect').addEventListener('change', (e) => {
+                map.removeLayer(currentBasemap);
+                currentBasemap = baseLayers[e.target.value];
+                map.addLayer(currentBasemap);
+                currentBasemap.bringToBack();
+            });
+
+            const initialMapBounds = CONFIG.map_settings?.max_bounds || [[33, -121], [39, -116]];
+            map.setMaxBounds(initialMapBounds);
+            map.fitBounds(initialMapBounds);
+
+            const timestampDisplay = document.getElementById('timestamp');
+            const playButton = document.getElementById('playButton');
+            const frameSlider = document.getElementById('frameSlider');
+            const speedControl = document.getElementById('speedControl');
+            const opacitySlider = document.getElementById('opacitySlider');
+            const timeSelect = document.getElementById("timeSelect");
+            const dateInput = document.getElementById("dateInput");
+            const legendTitle = document.getElementById('legendTitle');
+            const colorBar = document.getElementById('colorBar');
+            const legendLabelsContainer = document.getElementById('legendLabels');
+
+            let frontLayer = null, backLayer = null, currentFrame = 0, isPlaying = false, animationInterval, speed = 1000;
+
+            let velocityLayer = null;
+
+            function preloadTileLayer(index) {
+                if (!tileFrames[index]) return null;
+                // Use dynamic Tile Server URL
+                const url =  `${TILE_BASE_URL}/${tileFrames[index].folder}/{z}/{x}/{y}.png`;
+                return L.tileLayer(url, { tms: true, maxZoom: 10, minZoom: 2, opacity: 0, zIndex: 10 }).addTo(map);
+            }
+
+            function formatDateTimeForDisplay(dateTimeString) {
+                if (!dateTimeString) return 'N/A';
+                const [date, time] = dateTimeString.split(' ');
+                return `${date} ${time.substring(0, 5)}`;
+            }
+
+            function initializeVelocityLayer() {
+                if (velocityLayer) {
+                    layerControl.removeLayer(velocityLayer);
+                    map.removeLayer(velocityLayer);
+                }
+
+                velocityLayer = L.velocityLayer({
+                    displayValues: true,
+                    displayOptions: {
+                        velocityType: '10m Wind (m/s)', 
+                        displayPosition: 'bottomleft',
+                        displayEmptyString: 'No wind data'
+                    },
+                    data: null, 
+                    minVelocity: 0,
+                    maxVelocity: 25, 
+                    velocityScale: 0.05, 
+                    particleMultiplier: 0.0005, 
+                    lineWidth: 2,
+                    colorScale: [
+                        "rgb(36,104, 180)", "rgb(60,157, 194)", "rgb(128,205,193)",
+                        "rgb(151,218,168)", "rgb(198,231,181)", "rgb(238,247,217)",
+                        "rgb(255,238,159)", "rgb(252,217,125)", "rgb(247,182,91)",
+                        "rgb(240,150,57)", "rgb(231,121,23)", "rgb(220,94,3)", "rgb(217,67,1)"
+                    ]
+                });
+                
+                layerControl.addOverlay(velocityLayer, "Wind Animation");
+            }
+
+            async function updateVelocityLayer(index) {
+                if (!velocityLayer || !tileFrames[index] || !tileFrames[index].time) {
+                    return;
+                }
+
+                const timestamp = tileFrames[index].time;
+                
+                // Call new API
+                const url = `${API_BASE_URL}/wind_vector_data?timestamp=${encodeURIComponent(timestamp)}`;
+                
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        velocityLayer.setData(null); 
+                    } else {
+                        velocityLayer.setData(data); 
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch/set wind vector data:", error);
+                    if (velocityLayer) velocityLayer.setData(null);
+                }
+            }
+
+            function updateFrame(index) {
+                if (tileFrames.length === 0) {
+                    timestampDisplay.textContent = '🕒 Time: No data available';
+                    frameSlider.value = 0;
+                    return;
+                }
+                currentFrame = index;
+                timestampDisplay.textContent = `🕒 Time: ${formatDateTimeForDisplay(tileFrames[index].time)}`;
+                frameSlider.value = index;
+                const nextLayer = preloadTileLayer(index);
+                if (!nextLayer) return;
+
+                nextLayer.setOpacity(0);
+                setTimeout(() => {
+                    nextLayer.setOpacity(opacitySlider.value);
+                    if (frontLayer) frontLayer.setOpacity(0);
+                }, 50);
+
+                setTimeout(() => {
+                    if (backLayer) map.removeLayer(backLayer);
+                    backLayer = frontLayer;
+                    frontLayer = nextLayer;
+                }, 600);
+                
+                if (Array.from(timeSelect.options).some(option => option.value === tileFrames[index].time)) {
+                    timeSelect.value = tileFrames[index].time;
+                }
+                if (tileFrames[index].time) {
+                    dateInput.value = tileFrames[index].time.split(" ")[0];
+                }
+
+                updateVelocityLayer(index);
+            }
+
+            function updateLegend(variableKey) {
+                const conf = CONFIG.variables[variableKey];
+                if (conf) {
+                    legendTitle.innerHTML = `${conf.name}<br>(${conf.unit})`;
+                    // Use the mapping function to assign the correct legacy CSS class
+                    colorBar.className = "color-bar-vertical " + getLegendClass(variableKey);
+                    
+                    // Calculate labels from Min/Max in config
+                    const max = conf.max_val;
+                    const min = conf.min_val;
+                    const mid = (max + min) / 2;
+                    
+                    legendLabelsContainer.innerHTML = `
+                        <span>${max}</span>
+                        <span>${mid}</span>
+                        <span>${min}</span>
+                    `;
+                }
+            }
+
+            function playAnimation() {
+                if (isPlaying || tileFrames.length === 0) return;
+                isPlaying = true;
+                playButton.textContent = '⏸';
+                animationInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % tileFrames.length;
+                    updateFrame(currentFrame);
+                }, speed);
+            }
+
+            function stopAnimation() {
+                isPlaying = false;
+                clearInterval(animationInterval);
+                playButton.textContent = '▶';
+            }
+
+            playButton.addEventListener('click', () => isPlaying ? stopAnimation() : playAnimation());
+            document.getElementById('stopButton').addEventListener('click', stopAnimation);
+            speedControl.addEventListener('input', (e) => {
+                speed = 2100 - (e.target.value * 100);
+                if (isPlaying) { stopAnimation(); playAnimation(); }
+            });
+            frameSlider.addEventListener('input', (e) => { stopAnimation(); updateFrame(parseInt(e.target.value)); });
+            
+            opacitySlider.addEventListener('input', () => {
+                if (frontLayer) frontLayer.setOpacity(opacitySlider.value);
+            });
+
+            document.getElementById('prevButton').addEventListener('click', () => {
+                stopAnimation();
+                currentFrame = currentFrame > 0 ? currentFrame - 1 : tileFrames.length - 1;
+                updateFrame(currentFrame);
+            });
+            document.getElementById('nextButton').addEventListener('click', () => {
+                stopAnimation();
+                currentFrame = (currentFrame + 1) % tileFrames.length;
+                updateFrame(currentFrame);
+            });
+
+            function populateTimeSelect() {
+                timeSelect.innerHTML = '';
+                if (tileFrames.length === 0) {
+                    timeSelect.innerHTML = '<option value="">No times available</option>';
+                    timeSelect.disabled = true;
+                    return;
+                }
+                timeSelect.disabled = false;
+                const uniqueFullTimestamps = [...new Set(tileFrames.map(frame => frame.time))].sort();
+                uniqueFullTimestamps.forEach(fullTimestamp => {
+                    const option = document.createElement('option');
+                    option.value = fullTimestamp;
+                    option.textContent = formatDateTimeForDisplay(fullTimestamp);
+                    timeSelect.appendChild(option);
+                });
+                if (tileFrames.length > 0) timeSelect.value = tileFrames[0].time;
+            }
+
+            timeSelect.addEventListener("change", () => {
+                const index = tileFrames.findIndex(frame => frame.time === timeSelect.value);
+                if (index !== -1) {
+                    stopAnimation();
+                    updateFrame(index);
+                }
+            });
+
+            dateInput.addEventListener("change", () => {
+                const selectedDate = dateInput.value;
+                const firstFrameForDate = tileFrames.find(frame => frame.time.startsWith(selectedDate));
+                if (firstFrameForDate) {
+                    const index = tileFrames.indexOf(firstFrameForDate);
+                    stopAnimation();
+                    updateFrame(index);
+                } else {
+                    alert(`No data available for date: ${selectedDate}`);
+                }
+            });
+            
+            // Mouse Probe Logic
+            const probeDisplay = document.getElementById('probe-display');
+            let probeTimeout;
+            map.on('mousemove', function (e) {
+                if (probeTimeout) clearTimeout(probeTimeout);
+                probeTimeout = setTimeout(async () => {
+                    if (tileFrames.length === 0 || !tileFrames[currentFrame]) return;
+                    const { lat, lng } = e.latlng;
+                    const timestamp = tileFrames[currentFrame].time;
+                    const variableKey = currentVariable;
+                    const variableUnit = CONFIG.variables[variableKey].unit;
+
+                    const locationStr = `<br><small>${lat.toFixed(3)} N, ${lng.toFixed(3)} W</small>`;
+                    probeDisplay.style.display = 'block';
+                    probeDisplay.innerHTML = `Probing...${locationStr}`;
+                    try {
+                        const res = await fetch(`${API_BASE_URL}/probe/`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ lat, lon: lng, timestamp, variable: variableKey })
+                        });
+                        if (!res.ok) {
+                           probeDisplay.innerHTML = `No data${locationStr}`;
+                        } else {
+                            const data = await res.json();
+                            probeDisplay.innerHTML = (data.value !== null) 
+                                ? `${data.value.toFixed(2)} ${variableUnit}${locationStr}` 
+                                : `No data${locationStr}`;
+                        }
+                    } catch (err) {
+                        probeDisplay.innerHTML = `Unavailable${locationStr}`;
+                    }
+                }, 200);
+            });
+            map.on('mouseout', () => {
+                probeDisplay.style.display = 'none';
+                clearTimeout(probeTimeout);
+            });
+
+            // On-click Timeseries Popup
+            map.on("click", async function (e) {
+                if(e.originalEvent.target.closest('.leaflet-draw-toolbar') || e.originalEvent.target.closest('.leaflet-control-geosearch')) return;
+                const { lat, lng } = e.latlng;
+                // Logic updated to use dynamic selected options
+                const selectedVariables = selectedOptions; 
+                
+                if (selectedVariables.length === 0) {
+                    L.popup().setLatLng(e.latlng).setContent("⚠️ Please select at least one variable to analyze.").openOn(map);
+                    return;
+                }
+                const popup = L.popup({maxWidth: 850, minWidth: 420}).setLatLng(e.latlng).setContent("Fetching data...").openOn(map);
+                try {
+                    const res = await fetch(`${API_BASE_URL}/popup_timeserie_multiple/`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lat, lon: lng, variable: selectedVariables })
+                    });
+                    const data = await res.json();
+                    const content = data.error ? `<b>Error:</b> ${data.error}` : `<b>Time Series</b><br>Location: (${lat.toFixed(2)}, ${lng.toFixed(2)})<br><img src="data:image/png;base64,${data.image_base64}" width="400"/>`;
+                    popup.setContent(content);
+                } catch (err) {
+                    popup.setContent("⚠️ Error contacting timeseries API.");
+                }
+            });
+
+            // --- AREA-BASED ANALYSIS JAVASCRIPT ---
+            let drawnItems, drawnAreaBounds;
+            const appContainer = document.getElementById('app-container');
+            const analysisView = document.getElementById('analysis-view');
+            const returnToMapBtn = document.getElementById('returnToMapBtn');
+            const analyzeAreaButton = document.getElementById('analyzeAreaButton');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+            
+            const drawControl = new L.Control.Draw({
+                edit: { featureGroup: drawnItems, remove: true },
+                draw: {
+                    polygon: false, polyline: false, circle: false, circlemarker: false, marker: false,
+                    rectangle: { shapeOptions: { color: '#e67e22' } }
+                }
+            });
+            map.addControl(drawControl);
+
+            map.on(L.Draw.Event.CREATED, function (event) {
+                drawnItems.clearLayers();
+                const layer = event.layer;
+                drawnItems.addLayer(layer);
+                drawnAreaBounds = layer.getBounds();
+                analyzeAreaButton.disabled = false;
+            });
+            
+            map.on('draw:edited', (e) => e.layers.eachLayer(layer => drawnAreaBounds = layer.getBounds()));
+            map.on('draw:deleted', () => {
+                drawnAreaBounds = null;
+                analyzeAreaButton.disabled = true;
+            });
+
+            analyzeAreaButton.addEventListener('click', async () => {
+                if (!drawnAreaBounds) {
+                    alert("Please draw a rectangular area on the map first.");
+                    return;
+                }
+                const selectedVariables = selectedOptions;
+
+                if (selectedVariables.length === 0) {
+                    alert("Please select at least one variable to analyze.");
+                    return;
+                }
+                loadingOverlay.style.display = 'flex';
+                const requestBody = {
+                    lat_min: drawnAreaBounds.getSouth(),
+                    lat_max: drawnAreaBounds.getNorth(),
+                    lon_min: drawnAreaBounds.getWest(),
+                    lon_max: drawnAreaBounds.getEast(),
+                    variables: selectedVariables,
+                    timestamp: tileFrames[currentFrame].time
+                };
+                try {
+                    const response = await fetch(`${API_BASE_URL}/area_analysis/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody)
+                    });
+                    if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+                    const results = await response.json();
+                    renderAnalysisResults(results);
+                    appContainer.style.display = 'none';
+                    analysisView.style.display = 'flex';
+                } catch (error) {
+                    console.error("Area analysis failed:", error);
+                    alert(`Area analysis failed: ${error.message}`);
+                } finally {
+                    loadingOverlay.style.display = 'none';
+                }
+            });
+
+            function renderAnalysisResults(results) {
+                const container = document.getElementById('analysis-results-container');
+                container.innerHTML = '';
+                for (const varKey in results) {
+                    const result = results[varKey];
+                    const section = document.createElement('div');
+                    section.className = 'variable-analysis-section';
+
+                    if (result.error) {
+                        section.innerHTML = `<h3>${varKey.toUpperCase()}</h3><p class="text-red-500">Analysis failed: ${result.error}</p>`;
+                    } else {
+                        const stats = result.stats_current_frame;
+                        const statsHtml = stats && Object.keys(stats).length > 0 ? `
+                            <div class="stats-grid">
+                                <div class="stat-card"><div class="stat-card-title">Mean</div><div class="stat-card-value">${stats.mean.toFixed(2)} ${result.units}</div></div>
+                                <div class="stat-card"><div class="stat-card-title">Min</div><div class="stat-card-value">${stats.min.toFixed(2)} ${result.units}</div></div>
+                                <div class="stat-card"><div class="stat-card-title">Max</div><div class="stat-card-value">${stats.max.toFixed(2)} ${result.units}</div></div>
+                                <div class="stat-card"><div class="stat-card-title">Std. Dev.</div><div class="stat-card-value">${stats.std_dev.toFixed(2)}</div></div>
+                            </div>
+                        ` : '<p>No data for the current frame in this area.</p>';
+
+                        // Create unique IDs for tabs
+                        const tabId = `tabs-${varKey}`;
+
+                        section.innerHTML = `
+                            <h3>${result.variable_name}</h3>
+
+                            <div class="tab-navigation">
+                                <button class="tab-button active" onclick="switchTab(event, '${tabId}', 'statistics')">📊 Statistics & Time Series</button>
+                                <button class="tab-button" onclick="switchTab(event, '${tabId}', 'map')">🗺️ Map Visualization</button>
+                            </div>
+
+                            <div id="${tabId}-statistics" class="tab-content active">
+                                <h4 class="font-semibold mb-3 text-gray-700">Statistics for Current Frame (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
+                                ${statsHtml}
+                                <div class="plots-container">
+                                    <div class="plot-wrapper">
+                                        <h4 class="font-semibold mb-2">Time Series (Min, Mean, Max)</h4>
+                                        <img src="data:image/png;base64,${result.timeseries_plot}" alt="Time series plot">
+                                    </div>
+                                    <div class="plot-wrapper">
+                                        <h4 class="font-semibold mb-2">Overall Data Distribution</h4>
+                                        <img src="data:image/png;base64,${result.boxplot}" alt="Boxplot">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="${tabId}-map" class="tab-content">
+                                <h4 class="font-semibold mb-3 text-gray-700">Spatial Distribution for Selected Area (${formatDateTimeForDisplay(tileFrames[currentFrame].time)})</h4>
+                                <div class="plot-wrapper">
+                                    <img src="data:image/png;base64,${result.static_plot}" alt="Static map visualization" style="max-width: 800px; margin: 0 auto; display: block;">
+                                    <p style="margin-top: 15px; color: #6c757d; font-size: 14px;">
+                                        This map shows the spatial distribution of ${result.variable_name.toLowerCase()} values across the selected area.
+                                        The colorbar indicates the range from minimum (bottom) to maximum (top) values.
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    container.appendChild(section);
+                }
+            }
+
+            returnToMapBtn.addEventListener('click', () => {
+                analysisView.style.display = 'none';
+                appContainer.style.display = 'flex';
+                setTimeout(() => map.invalidateSize(), 10); 
+            });
+
+            // --- INFO MODAL JAVASCRIPT ---
+            const infoButton = document.getElementById('infoButton');
+            const infoModalOverlay = document.getElementById('infoModalOverlay');
+            const closeInfoModal = document.getElementById('closeInfoModal');
+
+            function showInfoModal() {
+                infoModalOverlay.style.display = 'flex';
+            }
+
+            function hideInfoModal() {
+                infoModalOverlay.style.display = 'none';
+            }
+
+            infoButton.addEventListener('click', showInfoModal);
+            closeInfoModal.addEventListener('click', hideInfoModal);
+            
+            infoModalOverlay.addEventListener('click', function(event) {
+                if (event.target === infoModalOverlay) {
+                    hideInfoModal();
+                }
+            });
+
+            // Initialize Components after Config Load
+            initializeMultiSelect();
+            loadTileFramesForVariable(currentVariable);
+            updateLegend(currentVariable);
+        });
+
+        // Tab switching function - MOVED HERE (GLOBAL SCOPE)
+        function switchTab(event, tabId, tabName) {
+            // Hide all tabs for this variable
+            const allTabs = document.querySelectorAll(`[id^="${tabId}-"]`);
+            allTabs.forEach(tab => tab.classList.remove('active'));
+
+            // Remove active class from all buttons in this tab group
+            const tabButtons = document.querySelectorAll(`[onclick*="${tabId}"]`);
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            const selectedTab = document.getElementById(`${tabId}-${tabName}`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+
+            // Activate the clicked button
+            event.target.classList.add('active');
+        }
+    </script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tour = new Shepherd.Tour({
+            useModalOverlay: true,
+            defaultStepOptions: {
+                classes: 'shadow-md bg-purple-600',
+                scrollTo: true,
+                cancelIcon: {
+                    enabled: true
+                },
+                buttons: [
+                    {
+                        action() {
+                            return this.back();
+                        },
+                        secondary: true,
+                        text: 'Back'
+                    },
+                    {
+                        action() {
+                            return this.next();
+                        },
+                        text: 'Next'
+                    }
+                ]
+            }
+        });
+
+        // Define the steps of the tour
+        tour.addStep({
+            title: 'Welcome to the DLGNOME Viewer!',
+            text: 'This quick tour will guide you through the main features of the application. Click "Next" to begin.',
+            buttons: [{ action() { return this.next(); }, text: 'Start Tour' }]
+        });
+
+        tour.addStep({
+            title: 'Display Variable',
+            text: 'First, select the weather variable you want to visualize on the map, like Wind Speed or Temperature.',
+            attachTo: { element: '#variableSelect', on: 'bottom' },
+            id: 'step1'
+        });
+
+        tour.addStep({
+            title: 'Toggle Layers',
+            text: 'Use this control to toggle the animated wind particles on or off.',
+            attachTo: { element: '.leaflet-control-layers', on: 'bottom' },
+            id: 'step-velocity'
+        });
+
+        tour.addStep({
+            title: 'Control Time',
+            text: 'Use the slider to scrub through time, or use the animation controls to play the forecast sequence.',
+            attachTo: { element: '#frameSlider', on: 'bottom' },
+            id: 'step2'
+        });
+        
+        tour.addStep({
+            title: 'Analyze Variables',
+            text: 'To perform an analysis or see on-click time-series plots, you must first select one or more variables from this dropdown.',
+            attachTo: { element: '#multi-select-container', on: 'top' },
+            id: 'step3'
+        });
+
+        tour.addStep({
+            title: 'Draw an Area',
+            text: 'Next, use the rectangle tool on the map to draw an area you want to analyze.',
+            attachTo: { element: '.leaflet-draw-toolbar', on: 'right' },
+            id: 'step4'
+        });
+        
+        tour.addStep({
+            title: 'Run the Analysis',
+            text: 'Once you\'ve drawn an area, this button will become active. Click it to get detailed statistics and plots for your selection.',
+            attachTo: { element: '#analyzeAreaButton', on: 'top' },
+            id: 'step5'
+        });
+
+        tour.addStep({
+            title: 'Tour Complete!',
+            text: 'You\'re all set! You can restart this tour anytime by clicking the "play" icon in the top-right corner.',
+            buttons: [{ action() { return this.complete(); }, text: 'Finish' }]
+        });
+
+        // Link the tour to the button
+        document.getElementById('startTourBtn').addEventListener('click', () => {
+            tour.start();
+        });
+    });
+    </script>
+    </body>
+</html>
